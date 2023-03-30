@@ -57,5 +57,8 @@
         <geom pos="0.7 0 0" class="Way_line"/>
       </body>
     </body>
+<!--    <body euler="0 0 0" pos="17.3 -8 0">-->
+<!--        <geom type="box" size="0.1 0.1 0.1" rgba="1 0 0 1"/>-->
+<!--    </body>-->
   </worldbody>
 </mujoco>
