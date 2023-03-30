@@ -1,12 +1,7 @@
-# import keyword
 import mujoco
 import mujoco_viewer
 import numpy as np
-# import numpy as np
-# from numpy import savetxt
-from numpy import loadtxt
 from matplotlib import pyplot as plt
-import keyboard
 
 
 # get line formula as a matrix
@@ -17,6 +12,7 @@ def line_formula(from_point, to_point):
         from_point[0] * to_point[1],  # x0*y1
         - from_point[1] * to_point[0]  # x1*y0
     ])
+
 
 # got distance a point from a line
 def line_distance(cur_pos, current_line):
@@ -69,7 +65,7 @@ accelerations = []
 gyros = []
 inputs = []
 
-in_inputs = loadtxt('inputs.csv', delimiter=',')
+# our reference path
 reference_path_raw = [[0, 0, 0], [8.7, 0, 0], [8.7, -8, 0], [17.3, -8, 0]]
 reference_path = np.asarray(reference_path_raw)
 
@@ -80,6 +76,7 @@ currentLine = line_formula(reference_path[0], reference_path[1])
 nextLine = line_formula(reference_path[1], reference_path[2])
 referencedNextLine = referenced_line(reference_path[0], nextLine)
 
+# steer parameters
 par_next_dist = 0.0001
 par_steer = -1.3
 
@@ -120,7 +117,6 @@ for frame in range(14000):
         break
 
     # Steer Logic Region
-    print(line_distance(cur_pos=data.xpos[car_id], current_line=currentLine))
     newSteer = line_distance(cur_pos=data.xpos[car_id], current_line=currentLine) * par_steer
     data.ctrl[0] = newSteer
 
