@@ -4,14 +4,15 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-# get line formula as a matrix
+# get line formula and direction as a matrix
 def line_formula(from_point, to_point):
+    vector = np.array([to_point[0] - from_point[0], to_point[1] - from_point[1]])
     return np.array([
         from_point[1] - to_point[1],  # y0 - y1
         to_point[0] - from_point[0],  # x1 - x0
         from_point[0] * to_point[1],  # x0*y1
         - from_point[1] * to_point[0]  # x1*y0
-    ])
+    ]), vector / np.linalg.norm(vector)
 
 
 # got distance a point from a line
@@ -74,20 +75,18 @@ maxNextPathId = reference_path.shape[0] - 2
 currentPathId = 0
 currentLine = line_formula(reference_path[0], reference_path[1])
 nextLine = line_formula(reference_path[1], reference_path[2])
-referencedNextLine = referenced_line(reference_path[0], nextLine)
+referencedNextLine = referenced_line(reference_path[0], nextLine[0])
 
 # steer parameters
 par_next_dist = 0.0001
-par_steer = -1.3
+par_line = -1.0
+par_direction = 2
 
 for frame in range(14000):
     # data.ctrl[0] = in_inputs[frame][0]
     # data.ctrl[1] = in_inputs[frame][1]
-    # direction = data.xmat[car_id].reshape(3, 3)[[0, 1], 0]
-
     if viewer.is_alive:
         mujoco.mj_step(model, data)
-
         viewer.add_marker(
             pos=[0, 0, 0],
             size=[0.05, 0.05, 0.05],
@@ -115,11 +114,17 @@ for frame in range(14000):
 
     else:
         break
+    # direction = data.xmat[car_id].reshape(3, 3)[[0, 1], 0] //alternative direction but below one is faster
+    direction = data.xmat[car_id][[0, 3]]
+    dotProduct = np.dot(direction, currentLine[1])
+    crossProduct = np.cross(direction, currentLine[1])
+    print(crossProduct)
 
     # Steer Logic Region
-    newSteer = line_distance(cur_pos=data.xpos[car_id], current_line=currentLine) * par_steer
+    dist_to_line = line_distance(cur_pos=data.xpos[car_id], current_line=currentLine[0])
+    newSteer = dist_to_line * par_line + crossProduct * par_direction
     data.ctrl[0] = newSteer
-
+    print(f'steer = {newSteer}')
     # transfer logic to next line
     if nextLine is not None:  # if there is a nextline
         if line_distance(cur_pos=data.xpos[car_id], current_line=referencedNextLine) > par_next_dist:
@@ -127,7 +132,7 @@ for frame in range(14000):
             currentLine = nextLine
             if currentPathId != maxNextPathId:
                 nextLine = line_formula(reference_path[currentPathId + 1], reference_path[currentPathId + 2])
-                referencedNextLine = referenced_line(reference_path[currentPathId], nextLine)
+                referencedNextLine = referenced_line(reference_path[currentPathId], nextLine[0])
             else:
                 nextLine = None
     # /Steer Logic
