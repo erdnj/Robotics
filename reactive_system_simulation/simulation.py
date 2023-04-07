@@ -57,6 +57,8 @@ data.ctrl[1] = 1.0  # throttle, power to an engin
 
 car = data.body('buddy')
 car_id = car.id
+steering_wheel = data.body('steering_wheel')
+st_wheel_id = steering_wheel.id
 
 # Lists to keep outputs
 timevals = []
@@ -121,13 +123,15 @@ for frame in range(14000):
     print(crossProduct)
 
     # Steer Logic Region
-    dist_to_line = line_distance(cur_pos=data.xpos[car_id], current_line=currentLine[0])
+    # steer_wheel used as reference to detect curves earlier
+    cur_pos = data.xpos[st_wheel_id]
+    dist_to_line = line_distance(cur_pos=cur_pos, current_line=currentLine[0])
     newSteer = dist_to_line * par_line + crossProduct * par_direction
     data.ctrl[0] = newSteer
     print(f'steer = {newSteer}')
     # transfer logic to next line
     if nextLine is not None:  # if there is a nextline
-        if line_distance(cur_pos=data.xpos[car_id], current_line=referencedNextLine) > par_next_dist:
+        if line_distance(cur_pos=cur_pos, current_line=referencedNextLine) > par_next_dist:
             currentPathId += 1
             currentLine = nextLine
             if currentPathId != maxNextPathId:
