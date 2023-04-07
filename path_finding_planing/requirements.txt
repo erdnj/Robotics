@@ -1,0 +1,5 @@
+matplotlib
+numpy
+mujoco
+mujoco-python-viewer
+pyyaml
