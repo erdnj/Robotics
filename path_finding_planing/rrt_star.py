@@ -10,11 +10,10 @@ import math
 import sys
 import matplotlib.pyplot as plt
 import pathlib
-sys.path.append(str(pathlib.Path(__file__).parent.parent))
-
-from RRT.rrt import RRT
-
-show_animation = True
+import numpy as np
+from rrt import RRT
+from probabilistic_road_map import get_obs_and_goal
+#show_animation = True
 
 
 class RRTStar(RRT):
@@ -245,30 +244,29 @@ class RRTStar(RRT):
                 self.propagate_cost_to_leaves(node)
 
 
-def main():
+def get_rrt_star_path(show_animation=False):
     print("Start " + __file__)
 
-    # ====Search Path with RRT====
-    obstacle_list = [
-        (5, 5, 1),
-        (3, 6, 2),
-        (3, 8, 2),
-        (3, 10, 2),
-        (7, 5, 2),
-        (9, 5, 2),
-        (8, 10, 1),
-        (6, 12, 1),
-    ]  # [x,y,size(radius)]
+    # obstacles, start and goal points
+    sx, sy, gx, gy, ox, oy = get_obs_and_goal()
+
+    # adding wall sizes
+    obs_2col = np.column_stack((ox, oy))
+    obstacle_list = np.pad(obs_2col, ((0, 0), (0, 1)), 'constant', constant_values=(0, 0.1))
+
 
     # Set Initial parameters
     rrt_star = RRTStar(
-        start=[0, 0],
-        goal=[6, 10],
-        rand_area=[-2, 15],
+        start=[sx, sy],
+        goal=[gx, gy],
+        rand_area=[-8.7, 17.3],
         obstacle_list=obstacle_list,
-        expand_dis=1,
-        robot_radius=0.8)
-    path = rrt_star.planning(animation=show_animation)
+        expand_dis=2,
+        path_resolution=0.2,
+        connect_circle_dist=5,
+        max_iter=5000,
+        robot_radius=0.2)
+    path = rrt_star.planning(animation=False)
 
     if path is None:
         print("Cannot find path")
@@ -281,7 +279,10 @@ def main():
             plt.plot([x for (x, y) in path], [y for (x, y) in path], 'r--')
             plt.grid(True)
             plt.show()
+    assert path is not None
 
-
+    finded_path = np.asarray(path)
+    finded_path = np.flip(finded_path, axis=0)
+    return finded_path
 if __name__ == '__main__':
-    main()
+    get_rrt_star_path()

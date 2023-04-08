@@ -3,6 +3,7 @@ import mujoco_viewer
 import numpy as np
 from matplotlib import pyplot as plt
 from probabilistic_road_map import get_prm_path
+from rrt_star import get_rrt_star_path
 
 
 # get line formula and direction as a matrix
@@ -69,13 +70,18 @@ accelerations = []
 gyros = []
 inputs = []
 
-# our reference path
+# pre reference path
 # reference_path_raw = [[0, 0, 0], [8.7, 0, 0], [8.7, -8, 0], [17.3, -8, 0]]
 #reference_path_raw = [[0, 0, 0], [8.3, 0, 0], [8.7, -0.4, 0], [8.7, -8, 0], [17.3, -8, 0]]
-
 #reference_path = np.asarray(reference_path_raw)
 
-reference_path_2column = get_prm_path()
+#for rrt star path planning
+# reference_path_2column = get_rrt_star_path(show_animation=True)
+
+#for PRM path planning
+reference_path_2column = get_prm_path(show_animation=True)
+
+#
 reference_path = np.pad(reference_path_2column, ((0, 0), (0, 1)), 'constant', constant_values=(0, 0))
 
 # Steer Logic Related Vars
@@ -129,7 +135,6 @@ for frame in range(14000):
     direction = data.xmat[car_id][[0, 3]]
     dotProduct = np.dot(direction, currentLine[1])
     crossProduct = np.cross(direction, currentLine[1])
-    print(crossProduct)
 
     # Steer Logic Region
     # steer_wheel used as reference to detect curves earlier
@@ -137,7 +142,7 @@ for frame in range(14000):
     dist_to_line = line_distance(cur_pos=cur_pos, current_line=currentLine[0])
     newSteer = dist_to_line * par_line + crossProduct * par_direction
     data.ctrl[0] = newSteer
-    print(f'steer = {newSteer}')
+
     # transfer logic to next line
     if nextLine is not None:  # if there is a nextline
         if line_distance(cur_pos=cur_pos, current_line=referencedNextLine) > par_next_dist:
@@ -160,9 +165,9 @@ for frame in range(14000):
 # ninputs = np.asarray(inputs);
 # savetxt('inputs.csv', ninputs, delimiter=',')
 
-dpi = 300
-width = 1800
-height = 4800
+dpi = 80
+width = 450
+height = 900
 figsize = (width / dpi, height / dpi)
 _, ax = plt.subplots(5, 1, figsize=figsize, dpi=dpi, sharex=True)
 

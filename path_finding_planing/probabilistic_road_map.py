@@ -258,14 +258,10 @@ def sample_points(sx, sy, gx, gy, rr, ox, oy, obstacle_kd_tree, rng):
 
     return sample_x, sample_y
 
-
-def get_prm_path(rng=None):
-    print(__file__ + " start!!")
-
+def get_obs_and_goal():
     # start and goal position
     sx, sy = 0.0, 0.0  # [m]
     gx, gy = 17.3, -8  # [m]
-    robot_size = 0.4  # [m]
 
     padding = 1.0
 
@@ -283,38 +279,46 @@ def get_prm_path(rng=None):
     for i in np.arange(esx, egx, 0.1):
         ox.append(i)
         oy.append(egy)
-    for i in np.arange(esy, egy, 0.1):
+    for i in np.arange(esy, egy, -0.1):
         ox.append(esx)
         oy.append(i)
-    for i in np.arange(esy, egy, 0.1):
+    for i in np.arange(esy, egy, -0.1):
         ox.append(egx)
         oy.append(i)
 
     # inner walls
     # first walls
-    for i in np.arange(esx, egx-7.9-padding, 0.1):
+    for i in np.arange(esx, egx - 7.9 - padding, 0.1):
         ox.append(i)
         oy.append(esy)
-    for i in np.arange(esx, egx-9.3-padding, 0.1):
+    for i in np.arange(esx, egx - 9.3 - padding, 0.1):
         ox.append(i)
-        oy.append(esy-1.4)
+        oy.append(esy - 1.4)
 
     # mid walls
-    for i in np.arange(esy, egy+1.4, -0.1):
-        ox.append(egx-7.9-padding)
+    for i in np.arange(esy, egy + 1.4, -0.1):
+        ox.append(egx - 7.9 - padding)
         oy.append(i)
-    for i in np.arange(esy-1.4, egy, -0.1):
-        ox.append(egx-9.3-padding)
+    for i in np.arange(esy - 1.4, egy, -0.1):
+        ox.append(egx - 9.3 - padding)
         oy.append(i)
 
     # upper walls
-    for i in np.arange(egx-7.9-padding, egx, 0.1):
+    for i in np.arange(egx - 7.9 - padding, egx, 0.1):
         ox.append(i)
-        oy.append(egy+1.4)
-    for i in np.arange(egx-9.3-padding, egx, 0.1):
+        oy.append(egy + 1.4)
+    for i in np.arange(egx - 9.3 - padding, egx, 0.1):
         ox.append(i)
         oy.append(egy)
 
+    return sx, sy, gx, gy, ox, oy
+
+def get_prm_path(rng=None, show_animation = False):
+    print(__file__ + " start!!")
+    robot_size = 0.4  # [m]
+
+    # obstacles, start and goal points
+    sx, sy, gx, gy, ox, oy = get_obs_and_goal()
 
     if show_animation:
         plt.plot(ox, oy, ".k")
