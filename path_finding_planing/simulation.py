@@ -2,6 +2,7 @@ import mujoco
 import mujoco_viewer
 import numpy as np
 from matplotlib import pyplot as plt
+from probabilistic_road_map import get_prm_path
 
 
 # get line formula and direction as a matrix
@@ -57,6 +58,8 @@ data.ctrl[1] = 1.0  # throttle, power to an engin
 
 car = data.body('buddy')
 car_id = car.id
+steering_wheel = data.body('steering_wheel')
+st_wheel_id = steering_wheel.id
 
 # Lists to keep outputs
 timevals = []
@@ -67,8 +70,13 @@ gyros = []
 inputs = []
 
 # our reference path
-reference_path_raw = [[0, 0, 0], [8.7, 0, 0], [8.7, -8, 0], [17.3, -8, 0]]
-reference_path = np.asarray(reference_path_raw)
+# reference_path_raw = [[0, 0, 0], [8.7, 0, 0], [8.7, -8, 0], [17.3, -8, 0]]
+#reference_path_raw = [[0, 0, 0], [8.3, 0, 0], [8.7, -0.4, 0], [8.7, -8, 0], [17.3, -8, 0]]
+
+#reference_path = np.asarray(reference_path_raw)
+
+reference_path_2column = get_prm_path()
+reference_path = np.pad(reference_path_2column, ((0, 0), (0, 1)), 'constant', constant_values=(0, 0))
 
 # Steer Logic Related Vars
 maxNextPathId = reference_path.shape[0] - 2
@@ -101,15 +109,18 @@ for frame in range(14000):
             type=mujoco.mjtGeom.mjGEOM_ARROW,
             label="")
         for i in range(1, reference_path.shape[0]):
-            sizeArray = np.absolute((reference_path[i] - reference_path[i - 1]) / 2.0)
-            sizeArray[sizeArray == 0] = 0.01
-            viewer.add_marker(
-                pos=(reference_path[i - 1] + reference_path[i]) / 2.0,
-                size=sizeArray,
-                rgba=[1, 1, 0, 0.7],
-                type=mujoco.mjtGeom.mjGEOM_BOX,
-                label="track"
-            )
+            path_vector = (reference_path[i] - reference_path[i - 1])
+            path_step_vector = path_vector * 0.2 / np.linalg.norm(path_vector)
+            current_dot = reference_path[i - 1]
+            step_size = np.linalg.norm(path_vector) / 0.2
+            for _ in range(round(step_size)):
+                viewer.add_marker(
+                    pos=current_dot,
+                    size=[0.02, 0.02, 0.01],
+                    rgba=[1, 1, 0, 0.7],
+                    type=mujoco.mjtGeom.mjGEOM_SPHERE,
+                )
+                current_dot = current_dot + path_step_vector
         viewer.render()
 
     else:
@@ -121,13 +132,15 @@ for frame in range(14000):
     print(crossProduct)
 
     # Steer Logic Region
-    dist_to_line = line_distance(cur_pos=data.xpos[car_id], current_line=currentLine[0])
+    # steer_wheel used as reference to detect curves earlier
+    cur_pos = data.xpos[st_wheel_id]
+    dist_to_line = line_distance(cur_pos=cur_pos, current_line=currentLine[0])
     newSteer = dist_to_line * par_line + crossProduct * par_direction
     data.ctrl[0] = newSteer
     print(f'steer = {newSteer}')
     # transfer logic to next line
     if nextLine is not None:  # if there is a nextline
-        if line_distance(cur_pos=data.xpos[car_id], current_line=referencedNextLine) > par_next_dist:
+        if line_distance(cur_pos=cur_pos, current_line=referencedNextLine) > par_next_dist:
             currentPathId += 1
             currentLine = nextLine
             if currentPathId != maxNextPathId:

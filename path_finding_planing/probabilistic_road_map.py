@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 from scipy.spatial import KDTree
 
 # parameter
-N_SAMPLE = 500  # number of sample_points
-N_KNN = 10  # number of edge from one sampled point
+N_SAMPLE = 2000  # number of sample_points
+N_KNN = 15  # number of edge from one sampled point
 MAX_EDGE_LEN = 30.0  # [m] Maximum edge length
 
-show_animation = True
+show_animation = False
 
 
 class Node:
@@ -259,37 +259,62 @@ def sample_points(sx, sy, gx, gy, rr, ox, oy, obstacle_kd_tree, rng):
     return sample_x, sample_y
 
 
-def main(rng=None):
+def get_prm_path(rng=None):
     print(__file__ + " start!!")
 
     # start and goal position
-    sx = 10.0  # [m]
-    sy = 10.0  # [m]
-    gx = 50.0  # [m]
-    gy = 50.0  # [m]
-    robot_size = 5.0  # [m]
+    sx, sy = 0.0, 0.0  # [m]
+    gx, gy = 17.3, -8  # [m]
+    robot_size = 0.4  # [m]
+
+    padding = 1.0
+
+    # frame corners
+    esx, esy = 0.0 - padding, 0.7
+    egx, egy = 17.3 + padding, -8.7
 
     ox = []
     oy = []
 
-    for i in range(60):
+    # frame walls
+    for i in np.arange(esx, egx, 0.1):
         ox.append(i)
-        oy.append(0.0)
-    for i in range(60):
-        ox.append(60.0)
-        oy.append(i)
-    for i in range(61):
+        oy.append(esy)
+    for i in np.arange(esx, egx, 0.1):
         ox.append(i)
-        oy.append(60.0)
-    for i in range(61):
-        ox.append(0.0)
+        oy.append(egy)
+    for i in np.arange(esy, egy, 0.1):
+        ox.append(esx)
         oy.append(i)
-    for i in range(40):
-        ox.append(20.0)
+    for i in np.arange(esy, egy, 0.1):
+        ox.append(egx)
         oy.append(i)
-    for i in range(40):
-        ox.append(40.0)
-        oy.append(60.0 - i)
+
+    # inner walls
+    # first walls
+    for i in np.arange(esx, egx-7.9-padding, 0.1):
+        ox.append(i)
+        oy.append(esy)
+    for i in np.arange(esx, egx-9.3-padding, 0.1):
+        ox.append(i)
+        oy.append(esy-1.4)
+
+    # mid walls
+    for i in np.arange(esy, egy+1.4, -0.1):
+        ox.append(egx-7.9-padding)
+        oy.append(i)
+    for i in np.arange(esy-1.4, egy, -0.1):
+        ox.append(egx-9.3-padding)
+        oy.append(i)
+
+    # upper walls
+    for i in np.arange(egx-7.9-padding, egx, 0.1):
+        ox.append(i)
+        oy.append(egy+1.4)
+    for i in np.arange(egx-9.3-padding, egx, 0.1):
+        ox.append(i)
+        oy.append(egy)
+
 
     if show_animation:
         plt.plot(ox, oy, ".k")
@@ -299,14 +324,16 @@ def main(rng=None):
         plt.axis("equal")
 
     rx, ry = prm_planning(sx, sy, gx, gy, ox, oy, robot_size, rng=rng)
+    finded_path = np.column_stack((rx, ry))
+    finded_path = np.flip(finded_path, axis=0)
 
     assert rx, 'Cannot found path'
-
     if show_animation:
         plt.plot(rx, ry, "-r")
         plt.pause(0.001)
         plt.show()
 
+    return finded_path
 
 if __name__ == '__main__':
-    main()
+    get_prm_path()
