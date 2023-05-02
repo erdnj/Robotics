@@ -90,7 +90,7 @@
 			
 			<body name="fork_lift_body" pos="1.115 0 0.0">
 				<joint class="fork_lift_joint" name="fork_lifting" />				
-				<geom pos="0 -0.185 0.02" class="fork_geom" type="mesh"group="1"/>
+				<geom pos="0 -0.185 0.02" class="fork_geom" type="mesh" group="1"/>
 				<geom pos="0 0.185 0.02" class="fork_geom" type="mesh" group="1"/>
 			</body>
 			
