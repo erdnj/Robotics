@@ -36,13 +36,15 @@
 	</default>
 	
 	<worldbody>
-		<body name="atlas_transpalet_body" pos="0.0 0.0 0.0" euler="0 0 1.57">
+		<body name="atlas_transpalet_body" pos="0.0 0.0 0.0" euler="0 0 -1.57">
 			<camera name="third_person" mode="fixed" pos="-1 0 1" xyaxes="0 -1 0 1 0 1"/>
 			<joint type="free" />
 			<site name="base_link" pos="0 0 0" size="0.001 0.001 0.001"/>
 			
 			<geom name="atlas_transpalet_body" pos="1.275 0 0.00" type="mesh" mass="5" mesh="atlas_transpalet_body" />
-			
+
+			<site name="front_base_link" pos="1.275 0 0" size="0.001 0.001 0.001"/>
+
 			<body name="drive_wheel_body" pos="1.275 0 0.105" >
 				<joint class="steering_joint" name="drive_wheel_steering_joint" />
 				<joint class="throttle_joint" name="drive_wheel_throttle_tendon" />

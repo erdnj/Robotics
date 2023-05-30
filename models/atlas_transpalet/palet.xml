@@ -16,7 +16,7 @@
 	
 	<worldbody>
 		<body name="palet_body" pos="-5 3.4 0.075" euler="0 0 0">
-			<site name="palet_link" pos="0 0 0" size="0.001 0.001 0.001"/>
+			<site name="palet_link1" pos="0 0 0" size="0.001 0.001 0.001"/>
 			<joint type="free" />
 			<geom pos="0 0.400 0" class="palet_side_geom" contype="1" conaffinity="1"/>
 			<geom pos="0 0 0" class="palet_middle_geom" contype="1" conaffinity="1"/>
