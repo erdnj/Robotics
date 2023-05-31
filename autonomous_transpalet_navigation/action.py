@@ -31,6 +31,8 @@ class Action:
 
         # goal related
         self.goal_line = None
+        self.goal_point = None
+        self.goal_ori = None
 
         # Steer Logic Related Vars
         self.maxNextPathId = 0
@@ -38,9 +40,10 @@ class Action:
         self.currentLine = None
         self.nextLine = None
         self.referencedNextLine = None
+        self.endLine = None
 
         # steer parameters
-        self.par_next_dist = -0.2 #0.0001
+        self.par_next_dist = -0.2  # 0.0001
         self.par_line = -1.0
         self.par_direction = -1.0
 
@@ -79,12 +82,13 @@ class Action:
         start_point = self.front_robot_link.xpos[0:2] if self.isWeighted else self.robot_link.xpos[0:2]
         start_ori = - self.front_robot_link.xmat[[0, 3]] if self.isWeighted else self.front_robot_link.xmat[[0, 3]]
 
-        goal_point, goal_ori = get_goal_point(goal_link)
-        reference_path_2column = get_rrt_star_path(start_point, goal_point, self.wall_list)
+        self.goal_point, self.goal_ori = get_goal_point(goal_link)
+        reference_path_2column = get_rrt_star_path(start_point, self.goal_point, self.wall_list)
         self.reference_path = np.pad(reference_path_2column, ((0, 0), (0, 1)), 'constant', constant_values=(0, 0))
         print(self.reference_path)
         # after found path set reference_path
         # Steer Logic Related Vars
+        self.endLine = None
         self.maxNextPathId = self.reference_path.shape[0] - 2
         self.currentPathId = 0
         self.currentLine = line_formula(self.reference_path[0], self.reference_path[1])
@@ -117,9 +121,22 @@ class Action:
                     self.referencedNextLine = referenced_line(self.reference_path[self.currentPathId], self.nextLine[0])
                 else:
                     self.nextLine = None
+        else:
+            if self.endLine is None:
+                point = self.reference_path[self.currentPathId + 1]
+                direction_line = point - self.reference_path[self.currentPathId]
+                direction = direction_line / np.linalg.norm(direction_line)
+                self.endLine = line_formula_from_direction(point, direction)
+
+            distance = line_distance(cur_pos, self.endLine)
+            if distance > -0.0001:
+                self.drive_speed_actuator.ctrl = 0
+                self.state = States.Fork_Adjust
+            elif distance > -0.9:
+                self.drive_speed_actuator.ctrl = 0.1 if self.state == States.Head_Follow else -0.1
 
     def fork_follow(self):
-        self.par_line = 2
+        self.par_line = 4
         self.par_direction = 5
         self.drive_speed_actuator.ctrl = -1
         self.path_follow()
@@ -134,23 +151,36 @@ class Action:
         None
 
     def fork_adjust(self):
-        None
+        self.steering_angle_actuator.ctrl = -1
+
+        direction = self.robot_link.xmat[[0, 3]]
+        cross_product = np.cross(direction, self.goal_ori)
+        self.drive_speed_actuator.ctrl = np.clip(cross_product * 10, -1, 1)
+        print(cross_product)
+        if np.abs(cross_product) < 0.00001:
+            self.drive_speed_actuator.ctrl = 0
+            self.steering_angle_actuator.ctrl = 0
+            self.state = States.Fork_Step_In
 
     def fork_turn(self):
         None
 
     def fork_step_in(self):
-        self.drive_speed_actuator.ctrl = -1
-        self.steering_angle_actuator.ctrl = 0
-        direction = self.front_robot_link.xmat[[0, 3]]
-        goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else self.task_list[self.currentTaskId][0]
-        self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+        if self.goal_line is None:
+            direction = self.front_robot_link.xmat[[0, 3]]
+            goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else \
+                self.task_list[self.currentTaskId][0]
+            self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+            self.drive_speed_actuator.ctrl = -1
+            self.steering_angle_actuator.ctrl = 0
 
         cur_pos = self.robot_link.xpos[0:2]
         distance = line_distance(cur_pos, self.goal_line)
         if distance < -0.15:
             self.drive_speed_actuator.ctrl = 0
+            self.goal_line = None
             self.state = States.Lift_Down if self.isWeighted else States.Lift_Up
+
 
     def lift_up(self):
         if self.fork_height_actuator.ctrl < 1:
@@ -167,12 +197,12 @@ class Action:
             self.state = States.Fork_Step_Out
 
     def fork_step_out(self):
-        self.drive_speed_actuator.ctrl = 1
-        self.steering_angle_actuator.ctrl = 0
-
-        direction = self.front_robot_link.xmat[[0, 3]]
-        goal_link = self.task_list[self.currentTaskId][0]
-        self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+        if self.goal_line is None:
+            direction = self.front_robot_link.xmat[[0, 3]]
+            goal_link = self.task_list[self.currentTaskId][0]
+            self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+            self.drive_speed_actuator.ctrl = 1
+            self.steering_angle_actuator.ctrl = 0
 
         cur_pos = self.robot_link.xpos[0:2]
         distance = line_distance(cur_pos, self.goal_line)
@@ -186,11 +216,12 @@ class Action:
                 self.state = States.Path_Plan
 
 
+# helper funcs
 def get_goal_point(goal_link):
     pos = goal_link.xpos[0:2]
     direction = goal_link.xmat[[0, 3]]
     unit_direction = direction / np.linalg.norm(direction)
-    return pos + unit_direction * 0.8, -direction
+    return pos + unit_direction * 1.2, -direction
 
 
 def line_formula(from_point, to_point):
