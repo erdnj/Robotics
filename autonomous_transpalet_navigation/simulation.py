@@ -65,6 +65,7 @@ for _ in range(40000):
     if viewer.is_alive:
         result = actioner.forward()
         if result == -1:
+            print("break")
             break
         if actioner.reference_path is not None:
             reference_path = actioner.reference_path

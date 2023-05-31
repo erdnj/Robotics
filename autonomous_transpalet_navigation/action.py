@@ -30,9 +30,10 @@ class Action:
         self.reference_path = None
 
         # goal related
-        self.goal_line = None
+        self.goal_cross_line = None
         self.goal_point = None
         self.goal_ori = None
+        self.stepInLine = None
 
         # Steer Logic Related Vars
         self.maxNextPathId = 0
@@ -40,12 +41,19 @@ class Action:
         self.currentLine = None
         self.nextLine = None
         self.referencedNextLine = None
-        self.endLine = None
+
+        # stop lines
+        self.end_cross_line = None
+        self.goal_cross_line = None
 
         # steer parameters
         self.par_next_dist = -0.2  # 0.0001
-        self.par_line = -1.0
-        self.par_direction = -1.0
+        self.par_line = None
+        self.par_direction = None
+        self.par_line_fork = 4.0
+        self.par_direction_fork = 5.0
+        self.par_line_head = -1.5
+        self.par_direction_head = -1.0
 
     def forward(self):
         match self.state:
@@ -70,7 +78,7 @@ class Action:
             case States.Path_Plan:
                 self.find_path()
             case States.End:
-                None
+                return self.end()
 
     def find_path(self, extra_obs_list=None):
         goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else self.task_list[self.currentTaskId][0]
@@ -88,7 +96,7 @@ class Action:
         print(self.reference_path)
         # after found path set reference_path
         # Steer Logic Related Vars
-        self.endLine = None
+        self.end_cross_line = None
         self.maxNextPathId = self.reference_path.shape[0] - 2
         self.currentPathId = 0
         self.currentLine = line_formula(self.reference_path[0], self.reference_path[1])
@@ -122,28 +130,28 @@ class Action:
                 else:
                     self.nextLine = None
         else:
-            if self.endLine is None:
+            if self.end_cross_line is None:
                 point = self.reference_path[self.currentPathId + 1]
                 direction_line = point - self.reference_path[self.currentPathId]
                 direction = direction_line / np.linalg.norm(direction_line)
-                self.endLine = line_formula_from_direction(point, direction)
+                self.end_cross_line = line_formula_from_direction(point, direction)
 
-            distance = line_distance(cur_pos, self.endLine)
+            distance = line_distance(cur_pos, self.end_cross_line)
             if distance > -0.0001:
                 self.drive_speed_actuator.ctrl = 0
                 self.state = States.Fork_Adjust
-            elif distance > -0.9:
+            elif distance > -0.4:
                 self.drive_speed_actuator.ctrl = 0.1 if self.state == States.Head_Follow else -0.1
 
     def fork_follow(self):
-        self.par_line = 4
-        self.par_direction = 5
+        self.par_line = self.par_line_fork
+        self.par_direction = self.par_direction_fork
         self.drive_speed_actuator.ctrl = -1
         self.path_follow()
 
     def head_follow(self):
-        self.par_line = -1.5
-        self.par_direction = -1.0
+        self.par_line = self.par_line_head
+        self.par_direction = self.par_direction_head
         self.drive_speed_actuator.ctrl = 1
         self.path_follow()
 
@@ -157,7 +165,7 @@ class Action:
         cross_product = np.cross(direction, self.goal_ori)
         self.drive_speed_actuator.ctrl = np.clip(cross_product * 10, -1, 1)
         print(cross_product)
-        if np.abs(cross_product) < 0.00001:
+        if np.abs(cross_product) < 0.0001:
             self.drive_speed_actuator.ctrl = 0
             self.steering_angle_actuator.ctrl = 0
             self.state = States.Fork_Step_In
@@ -166,21 +174,29 @@ class Action:
         None
 
     def fork_step_in(self):
-        if self.goal_line is None:
-            direction = self.front_robot_link.xmat[[0, 3]]
+        if self.goal_cross_line is None:
             goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else \
                 self.task_list[self.currentTaskId][0]
-            self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+            target_point = goal_link.xpos[0:2]
+            self.goal_cross_line = line_formula_from_direction(target_point, -self.goal_ori)
             self.drive_speed_actuator.ctrl = -1
             self.steering_angle_actuator.ctrl = 0
+            self.stepInLine = line_formula(self.goal_point, target_point)
 
         cur_pos = self.robot_link.xpos[0:2]
-        distance = line_distance(cur_pos, self.goal_line)
+        direction = self.front_robot_link.xmat[[0, 3]]
+        cross_product = np.cross(direction, self.stepInLine[1])
+
+        dist_to_line = line_distance(cur_pos=cur_pos, current_line=self.stepInLine[0])
+        new_steer = dist_to_line * self.par_line_fork + cross_product * self.par_direction_fork
+        self.steering_angle_actuator.ctrl = np.clip(new_steer, -1, 1)
+
+        distance = line_distance(cur_pos, self.goal_cross_line)
+
         if distance < -0.15:
             self.drive_speed_actuator.ctrl = 0
-            self.goal_line = None
+            self.goal_cross_line = None
             self.state = States.Lift_Down if self.isWeighted else States.Lift_Up
-
 
     def lift_up(self):
         if self.fork_height_actuator.ctrl < 1:
@@ -197,23 +213,27 @@ class Action:
             self.state = States.Fork_Step_Out
 
     def fork_step_out(self):
-        if self.goal_line is None:
-            direction = self.front_robot_link.xmat[[0, 3]]
+        if self.goal_cross_line is None:
             goal_link = self.task_list[self.currentTaskId][0]
-            self.goal_line = line_formula_from_direction(goal_link.xpos[0:2], direction)
+            self.goal_cross_line = line_formula_from_direction(goal_link.xpos[0:2], -self.goal_ori)
             self.drive_speed_actuator.ctrl = 1
             self.steering_angle_actuator.ctrl = 0
 
         cur_pos = self.robot_link.xpos[0:2]
-        distance = line_distance(cur_pos, self.goal_line)
+        distance = line_distance(cur_pos, self.goal_cross_line)
         if distance > 0.8:
             self.drive_speed_actuator.ctrl = 0
-
-            if len(self.task_list) == self.currentTaskId + 1:
+            self.goal_cross_line = None
+            if self.currentTaskId + 1 == len(self.task_list):
                 self.state = States.End
             else:
                 self.currentTaskId += 1
                 self.state = States.Path_Plan
+
+    @staticmethod
+    def end():
+        print("End of simulation")
+        return -1
 
 
 # helper funcs
