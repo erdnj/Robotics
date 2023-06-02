@@ -36,7 +36,7 @@
 	</default>
 	
 	<worldbody>
-		<body name="atlas_transpalet_body" pos="0.0 0.0 0.0" euler="0 0 -1.57">
+		<body name="atlas_transpalet_body" pos="0.0 2.0 0.0" euler="0 0 -1.57">
 			<camera name="third_person" mode="fixed" pos="-1 0 1" xyaxes="0 -1 0 1 0 1"/>
 			<joint type="free" />
 			<site name="base_link" pos="0 0 0" size="0.001 0.001 0.001"/>
@@ -132,6 +132,9 @@
 	<sensor>
 	    <jointpos name="drive_wheel_steering_position" joint="drive_wheel_steering_joint"/>
     	    <jointvel name="drive_wheel_throttle_velocity" joint="drive_wheel_throttle_tendon"/>
+		<velocimeter name="velocimeter" site="front_base_link" />
+    	<accelerometer name="accelerometer" site="front_base_link" />
+		<gyro name="gyrometer" site="front_base_link" />
 	</sensor>
 	
 </mujoco>

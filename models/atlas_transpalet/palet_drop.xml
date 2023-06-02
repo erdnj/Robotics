@@ -3,6 +3,7 @@
 	<worldbody>
 		<body>
 			<site name="palet_drop1" pos="5 5 0" size="0.1 0.1 0.1" euler="0 0 1.57"/>
+<!--			<site name="palet_drop1" pos="20 5 0" size="0.1 0.1 0.1" euler="0 0 -3.14"/>-->
 		</body>
 	</worldbody>
 		

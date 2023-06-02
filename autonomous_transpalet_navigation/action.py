@@ -3,16 +3,17 @@ from enum import Enum
 
 from rrt_star import get_rrt_star_path
 
+
 States = Enum('State', ['Lift_Up', 'Lift_Down', 'Fork_Follow', 'Head_Follow', 'Head_Turn', 'Fork_Adjust', 'Fork_Turn',
-                        'Fork_Step_In', 'Fork_Step_Out', 'Path_Plan', 'End'])
+                        'Fork_Step_In', 'Fork_Step_Out', 'Path_Plan', 'End', 'Wait'])
 
 
 class Action:
-    def __init__(self, data, wall_info_list, num_task):
+    def __init__(self, data, wall_info_list, num_task, num_dyn_obj, with_dynamic):
         self.drive_speed_actuator = data.actuator("drive_speed")
         self.steering_angle_actuator = data.actuator("steering_angle")
         self.fork_height_actuator = data.actuator("fork_height")
-
+        self.data = data
         self.robot_link = data.site("base_link")
         self.front_robot_link = data.site("front_base_link")
         self.palet_link = None
@@ -25,6 +26,11 @@ class Action:
         self.isWeighted = False
         self.currentPath = None
         self.currentLine = None
+
+        #sensors
+        self.velocimeter = data.sensor("velocimeter")
+        self.accelerometer = data.sensor("accelerometer")
+        self.gyrometer = data.sensor("gyrometer")
 
         # path planning vars
         self.reference_path = None
@@ -55,8 +61,47 @@ class Action:
         self.par_line_head = -1.5
         self.par_direction_head = -1.0
 
+        # dynamic object
+        self.with_dynamic = with_dynamic
+        self.num_dyn_obj = num_dyn_obj
+        self.previous_time = 1
+        self.paused_state = None
+
+    def check_dynamic_collision(self):
+        curr_pos = self.front_robot_link.xpos[0:2] if self.state == States.Head_Follow \
+            else self.robot_link.xpos[0:2]
+
+        ob_poss = self.wall_list[-self.num_dyn_obj:]
+
+        dd = ob_poss[:,0:2] - curr_pos
+        hypots = np.hypot(dd[:, 0], dd[:, 1])
+        check = hypots - ob_poss[:, 2] - 1
+        print(check)
+        check = check <= 0
+        print(check.any())
+        return check.any()
+
+    def go_wait_state(self):
+        print("There is obstacle")
+        self.previous_time = self.data.time
+        self.paused_state = self.state
+        self.state = States.Wait
+
+    def wait_check(self):
+        if self.data.time - self.previous_time > 1.0:
+            self.previous_time = self.data.time
+            self.state = self.paused_state
+            self.paused_state = None
+
+
     def forward(self):
+        # print("Velocity= {}".format(self.velocimeter))
+        # print("Accelerometer= {}".format(self.accelerometer))
+        # print("Accelerometer= {}".format(self.gyrometer))
+
         match self.state:
+            case States.Wait:
+                self.wait_check()
             case States.Lift_Up:
                 self.lift_up()
             case States.Lift_Down:
@@ -81,21 +126,23 @@ class Action:
                 return self.end()
 
     def find_path(self, extra_obs_list=None):
-        goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else self.task_list[self.currentTaskId][0]
 
-        obs_list = self.wall_list
-        if extra_obs_list is not None:
-            np.concatenate((obs_list, extra_obs_list), axis=0)
+        goal_link = self.task_list[self.currentTaskId][1] if self.isWeighted else self.task_list[self.currentTaskId][0]
 
         start_point = self.front_robot_link.xpos[0:2] if self.isWeighted else self.robot_link.xpos[0:2]
         start_ori = - self.front_robot_link.xmat[[0, 3]] if self.isWeighted else self.front_robot_link.xmat[[0, 3]]
 
         self.goal_point, self.goal_ori = get_goal_point(goal_link)
         reference_path_2column = get_rrt_star_path(start_point, self.goal_point, self.wall_list)
+        if reference_path_2column is None:
+            self.drive_speed_actuator.ctrl = 0
+            self.go_wait_state()
+            return
         self.reference_path = np.pad(reference_path_2column, ((0, 0), (0, 1)), 'constant', constant_values=(0, 0))
-        print(self.reference_path)
+        print("Reference Path:{}".format(self.reference_path))
         # after found path set reference_path
         # Steer Logic Related Vars
+        self.nextLine = None
         self.end_cross_line = None
         self.maxNextPathId = self.reference_path.shape[0] - 2
         self.currentPathId = 0
@@ -106,6 +153,13 @@ class Action:
         self.state = States.Head_Follow if self.isWeighted else States.Fork_Follow
 
     def path_follow(self):
+        if (self.data.time - self.previous_time) > 2.0:
+            self.previous_time = self.data.time
+            if self.check_dynamic_collision() and self.with_dynamic:
+                self.state = States.Path_Plan
+                return
+
+
         cur_pos = self.front_robot_link.xpos[0:2] if self.state == States.Head_Follow \
             else self.robot_link.xpos[0:2]
         direction = - self.front_robot_link.xmat[[0, 3]] if self.state == States.Head_Follow \
@@ -164,7 +218,6 @@ class Action:
         direction = self.robot_link.xmat[[0, 3]]
         cross_product = np.cross(direction, self.goal_ori)
         self.drive_speed_actuator.ctrl = np.clip(cross_product * 10, -1, 1)
-        print(cross_product)
         if np.abs(cross_product) < 0.0001:
             self.drive_speed_actuator.ctrl = 0
             self.steering_angle_actuator.ctrl = 0

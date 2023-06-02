@@ -6,6 +6,73 @@ import math
 import numpy as np
 from scipy.spatial.transform import Rotation
 from action import Action
+# from dynamic_window_approach import try_test
+
+
+def get_obstacles(model, wall_number):
+    wall_information = []
+    obs_info_list = []
+
+    for wall_index in range(1, wall_number + 1):
+        wall = model.geom('wall_' + str(wall_index))
+        wall_bottom_left_x = (wall.pos[0] - wall.size[0])
+        wall_bottom_left_y = (wall.pos[1] - wall.size[1])
+        wall_top_right_x = (wall.pos[0] + wall.size[0])
+        wall_top_right_y = (wall.pos[1] + wall.size[1])
+
+        wall_corners = [[wall_bottom_left_x, wall_bottom_left_y], [wall_top_right_x, wall_top_right_y]]
+        wall_information.append(wall_corners)
+
+    for wall in wall_information:
+        wall_bottom_left_x, wall_bottom_left_y = wall[0]
+        wall_top_right_x, wall_top_right_y = wall[1]
+
+        for x in np.arange(wall_bottom_left_x, wall_top_right_x, 0.5):
+            obs_info_list.append([x, wall_bottom_left_y])
+            obs_info_list.append([x, wall_top_right_y])
+
+        for y in np.arange(wall_bottom_left_y, wall_top_right_y, 0.5):
+            obs_info_list.append([wall_bottom_left_x, y])
+            obs_info_list.append([wall_top_right_x, y])
+
+        obs_info_list.append([wall_top_right_x, wall_top_right_y])
+
+    return obs_info_list, wall_information
+
+
+def get_obstacles_with_radius(model, wall_number):
+    wall_information_list = []
+    obs_info = []
+
+    for wall_index in range(1, wall_number + 1):
+        wall = model.geom('wall_' + str(wall_index))
+        wall_bottom_left_x = (wall.pos[0] - wall.size[0])
+        wall_bottom_left_y = (wall.pos[1] - wall.size[1])
+        wall_top_right_x = (wall.pos[0] + wall.size[0])
+        wall_top_right_y = (wall.pos[1] + wall.size[1])
+
+        wall_corners = [[wall_bottom_left_x, wall_bottom_left_y], [wall_top_right_x, wall_top_right_y]]
+        wall_information_list.append(wall_corners)
+
+    for wall_index in range(1, wall_number + 1):
+        wall = model.geom('wall_' + str(wall_index))
+        if wall.size[0] > wall.size[1]:
+            wall_radius = wall.size[1] / 2
+            start_x = (wall.pos[0] - wall.size[0]) + wall_radius
+            y = wall.pos[1]
+            end_x = (wall.pos[0] + wall.size[0]) - wall_radius
+            for i in np.arange(start_x, end_x, 0.1):
+                obs_info.append((i, y, wall_radius))
+        else:
+            wall_radius = wall.size[0] / 2
+            start_y = (wall.pos[1] - wall.size[1]) + wall_radius
+            x = wall.pos[0]
+            end_y = (wall.pos[1] + wall.size[1]) - wall_radius
+            for i in np.arange(start_y, end_y, 0.1):
+                obs_info.append((x, i, wall_radius))
+
+    return obs_info, wall_information_list
+
 
 model = mujoco.MjModel.from_xml_path('../models/atlas_transpalet/scene.xml')
 data = mujoco.MjData(model)
@@ -22,44 +89,48 @@ robot_base_link = data.site("base_link")
 palet_link = data.site("palet_link1")
 palet_drop = data.site("palet_drop1")
 
-wall_number = 12
-wall_information = []
-obs_info = []
+# obs_info_list, _ = get_obstacles(model, 12)
+# obs_info_array = np.array(obs_info_list)
+# try_test(obs_info_array)
 
-for wall_index in range(1, wall_number + 1):
-    wall = model.geom('wall_' + str(wall_index))
-    wall_bottom_left_x = (wall.pos[0] - wall.size[0])
-    wall_bottom_left_y = (wall.pos[1] - wall.size[1])
-    wall_top_right_x = (wall.pos[0] + wall.size[0])
-    wall_top_right_y = (wall.pos[1] + wall.size[1])
+with_dynamic = True
 
-    wall_corners = [[wall_bottom_left_x, wall_bottom_left_y], [wall_top_right_x, wall_top_right_y]]
-    wall_information.append(wall_corners)
+dynamic_object_actuators = [data.actuator("dynamic_object_1"), data.actuator("dynamic_object_2"), data.actuator("dynamic_object_3")]
+dynamic_object_positions = [data.site("dynamic_object_1_link"), data.site("dynamic_object_2_link"), data.site("dynamic_object_3_link")]
+dynamic_object_speed = 0.2
+dynamic_object_num = len(dynamic_object_positions)
 
-for wall_index in range(1, wall_number + 1):
-    wall = model.geom('wall_' + str(wall_index))
-    if wall.size[0] > wall.size[1]:
-        wall_radius = wall.size[1] / 2
-        start_x = (wall.pos[0] - wall.size[0]) + wall_radius
-        y = wall.pos[1]
-        end_x = (wall.pos[0] + wall.size[0]) - wall_radius
-        for i in np.arange(start_x, end_x, 0.1):
-            obs_info.append((i, y, wall_radius))
-    else:
-        wall_radius = wall.size[0]/2
-        start_y = (wall.pos[1] - wall.size[1]) + wall_radius
-        x = wall.pos[0]
-        end_y = (wall.pos[1] + wall.size[1]) - wall_radius
-        for i in np.arange(start_y, end_y, 0.1):
-            obs_info.append((x, i, wall_radius))
+obs_info_list, _ = get_obstacles_with_radius(model, 12)
+
+
+for _ in range(dynamic_object_num):
+    # obs_info_list.append([0.0, 0.0])
+    obs_info_list.append((20.0, 20.0, 0.2))
+
+obs_info_array = np.array(obs_info_list)
+
+
+def update_dynamic_objects(step_counter):
+    for dynamic_object_index in range(0, len(dynamic_object_actuators)):
+        dynamic_object_actuators[dynamic_object_index].ctrl = abs(math.sin(dynamic_object_speed * math.pi * step_counter / 1000)) * 100
+        # print(dynamic_object_positions[dynamic_object_index].xpos)
+        #obs_info_array[-dynamic_object_num:] = [link.xpos[0:2] for link in dynamic_object_positions]
+        obs_info_array[-dynamic_object_num:,0:2] = [ link.xpos[0:2] for link in dynamic_object_positions]
+
+
 mujoco.mj_step(model, data)
 
-actioner = Action(data, obs_info, 1)
+actioner = Action(data, obs_info_array, 1, dynamic_object_num, with_dynamic=with_dynamic)
+print(dynamic_object_num)
 
+step_counter = 0
 for _ in range(40000):
     previous_time = data.time
 
     while (data.time - previous_time) < 1.0 / 60:
+        if with_dynamic:
+            update_dynamic_objects(step_counter)
+        step_counter = step_counter + 0.2
         mujoco.mj_step(model, data)
 
     if viewer.is_alive:
@@ -89,87 +160,13 @@ for _ in range(40000):
             type=mujoco.mjtGeom.mjGEOM_SPHERE,
         )
         viewer.render()
-        # if state == 0:
-        #     forklift_rotation_matrix = numpy.array(robot_base_link.xmat).reshape(3, 3)
-        #     forklift_rotation = Rotation.from_matrix(forklift_rotation_matrix)
-        #     forklift_rotation_angles = forklift_rotation.as_euler("zyx", degrees=True)
-        #
-        #     if abs(forklift_rotation_angles[0] + 90) < 1:
-        #         drive_speed_actuator.ctrl = 0.0
-        #         steering_angle_actuator.ctrl = 0.0
-        #         state = state + 1
-        #         state_end_time = data.time
-        #     else:
-        #         drive_speed_actuator.ctrl = 1.0
-        #         steering_angle_actuator.ctrl = -1.0
-        #
-        # elif state == 1:
-        #     drive_speed_actuator.ctrl = 0.0
-        #     steering_angle_actuator.ctrl = 0.0
-        #
-        #     if abs(state_end_time - data.time) > 2:
-        #         state = state + 1
-        #         state_end_time = data.time
-        #
-        # elif state == 2:
-        #     forklift_position = robot_base_link.xpos
-        #     palet_position = palet_link.xpos
-        #
-        #     if abs(forklift_position[1] - palet_position[1]) < 0.01:
-        #         drive_speed_actuator.ctrl = 0.0
-        #         steering_angle_actuator.ctrl = 0.0
-        #         state = state + 1
-        #     else:
-        #         drive_speed_actuator.ctrl = -1 * abs(forklift_position[1] - palet_position[1])
-        #         steering_angle_actuator.ctrl = 0.0
-        #
-        # elif state == 3:
-        #     forklift_rotation_matrix = numpy.array(robot_base_link.xmat).reshape(3, 3)
-        #     forklift_rotation = Rotation.from_matrix(forklift_rotation_matrix)
-        #     forklift_rotation_angles = forklift_rotation.as_euler("zyx", degrees=True)
-        #     forklift_position = robot_base_link.xpos
-        #
-        #     if abs(forklift_rotation_angles[0] - 0) < 1:
-        #         drive_speed_actuator.ctrl = 0.0
-        #         steering_angle_actuator.ctrl = 0.0
-        #         state = state + 1
-        #         state_end_time = data.time
-        #     else:
-        #         drive_speed_actuator.ctrl = 1.0
-        #         steering_angle_actuator.ctrl = 1.0
-        #
-        # elif state == 4:
-        #     forklift_position = robot_base_link.xpos
-        #     palet_position = palet_link.xpos
-        #
-        #     if abs(forklift_position[0] - (palet_position[0] - 0.25)) < 0.1:
-        #         drive_speed_actuator.ctrl = 0.0
-        #         steering_angle_actuator.ctrl = 0.0
-        #         state = state + 1
-        #         state_end_time = data.time
-        #
-        #     else:
-        #         drive_speed_actuator.ctrl = (-1 * abs(forklift_position[0] - (palet_position[0] - 0.25)) / 2)
-        #         steering_angle_actuator.ctrl = 0.0
-        #
-        # elif state == 5:
-        #     drive_speed_actuator.ctrl = 0.0
-        #     steering_angle_actuator.ctrl = 0.0
-        #
-        #     if abs(state_end_time - data.time) > 2:
-        #         state = state + 1
-        #         state_end_time = data.time
-        #     else:
-        #         fork_height_actuator.ctrl = abs(state_end_time - data.time)
-        #
-        # elif state == 6:
-        #     drive_speed_actuator.ctrl = 0.60
-        #     steering_angle_actuator.ctrl = 0.8
-        #     fork_height_actuator.ctrl = 1.0
-        #
-        # viewer.render()
-        # print(state)
     else:
         break
 
 viewer.close()
+
+
+
+
+
+
