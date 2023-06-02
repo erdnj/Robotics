@@ -12,7 +12,7 @@ from enum import Enum
 import matplotlib.pyplot as plt
 import numpy as np
 
-show_animation = True
+
 
 
 def dwa_control(x, config, goal, ob):
@@ -41,11 +41,11 @@ class Config:
         self.max_speed = 1.0  # [m/s]
         self.min_speed = -0.5  # [m/s]
         self.max_yaw_rate = 40.0 * math.pi / 180.0  # [rad/s]
-        self.max_accel = 0.2  # [m/ss]
+        self.max_accel = 1.0  # [m/ss]
         self.max_delta_yaw_rate = 40.0 * math.pi / 180.0  # [rad/ss]
         self.v_resolution = 0.01  # [m/s]
         self.yaw_rate_resolution = 0.1 * math.pi / 180.0  # [rad/s]
-        self.dt = 0.1  # [s] Time tick for motion prediction
+        self.dt = 1.0  # [s] Time tick for motion prediction
         self.predict_time = 3.0  # [s]
         self.to_goal_cost_gain = 0.15
         self.speed_cost_gain = 1.0
@@ -55,11 +55,11 @@ class Config:
 
         # if robot_type == RobotType.circle
         # Also used to check if goal is reached in both types
-        self.robot_radius = 1.0  # [m] for collision check
+        self.robot_radius = 0.1  # [m] for collision check
 
         # if robot_type == RobotType.rectangle
-        self.robot_width = 0.5  # [m] for collision check
-        self.robot_length = 1.2  # [m] for collision check
+        self.robot_width = 0.730  # [m] for collision check
+        self.robot_length = 1.710  # [m] for collision check
         # obstacles [x(m) y(m), ....]
         self.ob = np.array([[-1, -1],
                             [0, 2],
@@ -257,21 +257,25 @@ def plot_robot(x, y, yaw, config):  # pragma: no cover
         plt.plot([x, out_x], [y, out_y], "-k")
 
 
-def main(gx=10.0, gy=10.0, robot_type=RobotType.circle):
+def try_test(obs_info, gx=-5, gy=3.4, robot_type=RobotType.rectangle):
+    show_animation = True
     print(__file__ + " start!!")
     # initial state [x(m), y(m), yaw(rad), v(m/s), omega(rad/s)]
-    x = np.array([0.0, 0.0, math.pi / 8.0, 0.0, 0.0])
+    x = np.array([0.0, 0.0, math.pi/2.0, 0.0, 0.0])
     # goal position [x(m), y(m)]
     goal = np.array([gx, gy])
-
+    config.ob = obs_info
     # input [forward speed, yaw_rate]
 
     config.robot_type = robot_type
     trajectory = np.array(x)
     ob = config.ob
     while True:
+
         u, predicted_trajectory = dwa_control(x, config, goal, ob)
+        print("u = {}".format(u))
         x = motion(x, u, config.dt)  # simulate robot
+        print("x = {}".format(x))
         trajectory = np.vstack((trajectory, x))  # store state history
 
         if show_animation:
@@ -290,6 +294,8 @@ def main(gx=10.0, gy=10.0, robot_type=RobotType.circle):
             plt.grid(True)
             plt.pause(0.0001)
 
+
+
         # check reaching goal
         dist_to_goal = math.hypot(x[0] - goal[0], x[1] - goal[1])
         if dist_to_goal <= config.robot_radius:
@@ -304,5 +310,5 @@ def main(gx=10.0, gy=10.0, robot_type=RobotType.circle):
 
 
 if __name__ == '__main__':
-    main(robot_type=RobotType.rectangle)
+    try_test()
     # main(robot_type=RobotType.circle)
